@@ -47,6 +47,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import android.app.Service;
 import android.content.ComponentName;
@@ -59,6 +63,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.util.Log;
+import android.widget.Toast;
 
 /**
  * @author Sindre Mehus
@@ -110,7 +115,12 @@ public class DownloadServiceImpl extends Service implements DownloadService {
 	
 	private Timer sleepTimer;
 	private int timerDuration;
-
+	
+	private ScheduledExecutorService executorService; 
+    private Runnable broadcastA2DP;
+    private ScheduledFuture<?> future;
+    
+            
     static {
         try {
             EqualizerController.checkAvailable();
@@ -130,7 +140,21 @@ public class DownloadServiceImpl extends Service implements DownloadService {
 
 	@Override
     public void onCreate() {
-        super.onCreate();
+        super.onCreate(); 
+        
+        executorService = Executors.newSingleThreadScheduledExecutor();
+        
+        broadcastA2DP = new Runnable() {
+			@Override
+			public void run() {
+				if (getCurrentPlaying()!=null){
+					Util.broadcastTrackInfoToA2DP(getApplicationContext(), currentPlaying.getSong(),downloadList.size(),getCurrentPlayingIndex(),getPlayerPosition());
+					Log.d("d","broadcast");
+				}else{
+		            Util.broadcastTrackInfoToA2DP(getApplicationContext(), null,(int) 0,(int) 0, (int) 0);
+				}
+			}
+		};
 
         mediaPlayer = new MediaPlayer();
         mediaPlayer.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
@@ -458,11 +482,9 @@ public class DownloadServiceImpl extends Service implements DownloadService {
 
         if (currentPlaying != null) {
         	Util.requestAudioFocus(this);
-        	Util.broadcastNewTrackInfo(this, currentPlaying.getSong());
-        	Util.broadcastNewTrackInfoToA2DP(this, currentPlaying.getSong(),downloadList.size(),getCurrentPlayingIndex());
+        	Util.broadcastNewTrackInfo(this, currentPlaying.getSong()); 	
         } else {
             Util.broadcastNewTrackInfo(this, null);
-            Util.broadcastNewTrackInfoToA2DP(this, null,(int) 0,(int) 0);
         }
 
         if (currentPlaying != null && showNotification) {
@@ -724,6 +746,33 @@ public class DownloadServiceImpl extends Service implements DownloadService {
         } else if (playerState == COMPLETED) {
             scrobbler.scrobble(this, currentPlaying, true);
         }
+       
+		
+        //TODO
+        if (playerState == STARTED || playerState == DOWNLOADING) {
+			
+        	//clear old threads
+        	if (future!=null){
+        		future.cancel(true);
+        	}
+			//started broadcasting with new thread
+			future = executorService.scheduleWithFixedDelay(broadcastA2DP, 0L, 3L, TimeUnit.SECONDS);
+			
+        }else{
+        	
+        	//clear broadcasting thread
+        	if (future!=null){
+        		future.cancel(true);
+        	}
+        	//broadcast once
+        	broadcastA2DP.run();
+        	
+        }
+        
+        
+        
+        
+        
     }
 
     @Override
@@ -1076,5 +1125,7 @@ public class DownloadServiceImpl extends Service implements DownloadService {
         public String toString() {
             return "BufferTask (" + downloadFile + ")";
         }
+        
+        
     }
 }

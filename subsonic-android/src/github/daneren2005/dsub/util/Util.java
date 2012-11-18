@@ -805,7 +805,7 @@ public final class Util {
         context.sendBroadcast(intent);
     }
     
-    public static void broadcastNewTrackInfoToA2DP(Context context, MusicDirectory.Entry song, int queueSize, int currentSongNumber){
+    public static void broadcastTrackInfoToA2DP(Context context, MusicDirectory.Entry song, int queueSize, int currentSongNumber, int currentPosition){
     	            
         //AVRCP 
         Intent avrcpIntent = new Intent(A2DP_EVENT_META_CHANGED);
@@ -819,8 +819,8 @@ public final class Util {
             //long data
             avrcpIntent.putExtra("ListSize",(long) queueSize);
             avrcpIntent.putExtra("id", (long) currentSongNumber);
-            avrcpIntent.putExtra("duration", (long) (song.getDuration()*1000));//convert to milliseconds
-            //avrcpIntent.putExtra("position", (long) downloadService.getPlayerPosition());
+            avrcpIntent.putExtra("duration", song.getDuration());
+            avrcpIntent.putExtra("position", (long) currentPosition);
             
         } else {
         	//string data
@@ -837,6 +837,14 @@ public final class Util {
         }
         
         //send broadcast
+        context.sendBroadcast(avrcpIntent);
+    }
+    
+    public static void broadcastCurrentPositionToA2DP(Context context, int currentPosition){
+        
+        //AVRCP 
+        Intent avrcpIntent = new Intent(A2DP_EVENT_META_CHANGED);
+        avrcpIntent.putExtra("position", (long) currentPosition);
         context.sendBroadcast(avrcpIntent);
     }
 
